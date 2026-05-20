@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Simulatore Piani di Pagamento – Soluzione Tasse</title>
+<style>
+    body { font-family: Arial, sans-serif; background: #f7f9fc; margin: 0; padding: 20px; color: #031341; }
+    .container { max-width: 480px; margin: auto; background: white; padding: 20px 26px; border-radius: 14px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12); border-top: 6px solid #031341; }
+    h1 { text-align: center; margin-top: 0; font-size: 22px; color: #031341; }
+    label { font-weight: bold; margin-top: 15px; display: block; }
+    select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 6px; }
+    .box { margin-top: 20px; background: #eef2fb; padding: 15px; border-radius: 10px; }
+    .result-line { margin: 8px 0; font-size: 15px; }
+    .rate-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .rate-table th, .rate-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: center; font-size: 14px; }
+    .rate-table th { background: #031341; color: white; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>Simulatore Piani di Pagamento</h1>
+    <label>Prodotto</label>
+    <select id="prodotto">
+        <option value="">Seleziona prodotto</option>
+    </select>
+    <label>Piano di pagamento</label>
+    <select id="piano">
+        <option value="">Seleziona</option>
+        <option value="unica">Unica soluzione</option>
+        <option value="0-30">0 / 30</option>
+        <option value="0-30-60">0 / 30 / 60</option>
+        <option value="0-30-60-90">0 / 30 / 60 / 90</option>
+        <option value="0-30-60-90-120">0 / 30 / 60 / 90 / 120</option>
+        <option value="0-30-60-90-120-150">0 / 30 / 60 / 90 / 120 / 150</option>
+        <option value="12">12 rate mensili</option>
+    </select>
+    <div id="output" class="box" style="display:none;"></div>
+</div>
+
+<script>
+    const IVA = 0.22;
+    
+    // Elenco prodotti aggiornato con le nuove spese EXTRA (250€ per CU, 390€ per TU/TUE)
+    const prodotti = [
+        { code: "CU 3000", net: 3000, extra: 250 },
+        { code: "CUE 4500", net: 4500, extra: 250 },
+        { code: "TU 5000", net: 5000, extra: 390 },
+        { code: "TUE 6500", net: 6500, extra: 390 },
+        { code: "TU 7500", net: 7500, extra: 390 },
+        { code: "TUE 9000", net: 9000, extra: 390 },
+        { code: "TU 10000", net: 10000, extra: 390 },
+        { code: "TUE 11500", net: 11500, extra: 390 },
+        { code: "TU 14000", net: 14000, extra: 390 },
+        { code: "TUE 15500", net: 15500, extra: 390 },
+        { code: "TU 18000", net: 18000, extra: 390 },
+        { code: "TUE 19500", net: 19500, extra: 390 }
+    ];
+
+    function euro(n) { return n.toLocaleString("it-IT",{style:"currency",currency:"EUR"}); }
+    
+    prodotti.forEach((p,i)=>{ 
+        let o=document.createElement("option"); 
+        o.value=i; 
+        o.innerText=p.code;
+        document.getElementById("prodotto").appendChild(o); 
+    });
+
+    document.getElementById("prodotto").addEventListener("change", calcola);
+    document.getElementById("piano").addEventListener("change", calcola);
+
+    function calcola(){
+        const idx=document.getElementById("prodotto").value;
+        const piano=document.getElementById("piano").value;
+        const box=document.getElementById("output");
+        
+        if(!idx||!piano){ box.style.display="none"; return; }
+        
+        const p=prodotti[idx];
+        const totaleLordo=(p.net+p.extra)*(1+IVA);
+        
+        // Logica di calcolo dell'anticipo adattata ai nuovi valori extra
+        let anticipo;
+        if(p.code==="CU 3000" || p.code==="CUE 4500"){
+            anticipo=(totaleLordo-250*1.22)*0.3 + (250*1.22);
+        } else {
+            anticipo=(totaleLordo-390*1.22)*0.3 + (390*1.22);
+        }
+        
+        let scadenze=[];
+        switch(piano){
+            case "unica": scadenze=[0]; break;
+            case "0-30": scadenze=[0,30]; break;
+            case "0-30-60": scadenze=[0,30,60]; break;
+            case "0-30-60-90": scadenze=[0,30,60,90]; break;
+            case "0-30-60-90-120": scadenze=[0,30,60,90,120]; break;
+            case "0-30-60-90-120-150": scadenze=[0,30,60,90,120,150]; break;
+            case "12": scadenze=Array.from({length:12},(_,i)=>i*30); break;
+        }
+
+        let html = `
+            <div class="result-line"><strong>Prodotto:</strong> ${p.code}</div>
+            <div class="result-line"><strong>Totale contratto (con IVA):</strong> ${euro(totaleLordo)}</div>
+            <div class="result-line"><strong>Anticipo (con IVA):</strong> ${euro(anticipo)}</div>`;
+
+        if(scadenze.length===1){
+            html += `<div class="result-line"><strong>Pagamento unico al giorno 0</strong></div>`;
+        } else {
+            const restante=totaleLordo-anticipo;
+            const nRate=scadenze.length-1;
+            const rata=restante/nRate;
+            
+            html+=`<table class="rate-table">
+                    <tr><th>Rata</th><th>Giorni</th><th>Importo</th></tr>
+                    <tr><td>1 (Anticipo)</td><td>0</td><td>${euro(anticipo)}</td></tr>`;
+            
+            scadenze.slice(1).forEach((g,i)=>{
+                html+=`<tr><td>${i+2}</td><td>${g}</td><td>${euro(rata)}</td></tr>`;
+            });
+            html+=`</table>`;
+        }
+        box.innerHTML=html;
+        box.style.display="block";
+    }
+</script>
+</body>
+</html>
